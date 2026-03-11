@@ -99,6 +99,39 @@ function Invoke-ComposeMySql {
     return $result
 }
 
+function Invoke-ComposeRedisCli {
+    param(
+        [pscustomobject]$Context,
+        [string[]]$Arguments
+    )
+
+    $redisPassword = $Context.EnvMap["REDIS_PASSWORD"]
+    if (-not $redisPassword) {
+        throw "REDIS_PASSWORD must exist in $($Context.EnvPath)"
+    }
+
+    $dockerArgs = @(
+        "compose",
+        "-f",
+        $Context.ComposePath,
+        "exec",
+        "-T",
+        "redis",
+        "redis-cli",
+        "--no-auth-warning",
+        "-a",
+        $redisPassword
+    ) + $Arguments
+
+    $result = & docker @dockerArgs
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "Redis command failed."
+    }
+
+    return $result
+}
+
 function Get-PerfProductRow {
     param(
         [pscustomobject]$Context,
@@ -137,4 +170,15 @@ function Ensure-Directory {
     if (-not (Test-Path $Path)) {
         New-Item -ItemType Directory -Force -Path $Path | Out-Null
     }
+}
+
+function Clear-InventoryMirror {
+    param(
+        [pscustomobject]$Context,
+        [int64]$ProductId
+    )
+
+    $productKey = "inventory:product:$ProductId"
+    [void](Invoke-ComposeRedisCli -Context $Context -Arguments @("DEL", $productKey))
+    [void](Invoke-ComposeRedisCli -Context $Context -Arguments @("SREM", "inventory:dirty-products", $ProductId.ToString()))
 }

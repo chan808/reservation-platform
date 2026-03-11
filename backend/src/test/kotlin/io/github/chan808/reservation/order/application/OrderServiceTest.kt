@@ -2,6 +2,8 @@ package io.github.chan808.reservation.order.application
 
 import io.github.chan808.reservation.common.ErrorCode
 import io.github.chan808.reservation.common.OrderException
+import io.github.chan808.reservation.inventory.api.InventoryApi
+import io.github.chan808.reservation.inventory.api.StockReservationResult
 import io.github.chan808.reservation.member.api.AuthMemberView
 import io.github.chan808.reservation.member.api.MemberApi
 import io.github.chan808.reservation.order.domain.Order
@@ -15,8 +17,6 @@ import io.github.chan808.reservation.payment.api.PaymentApi
 import io.github.chan808.reservation.payment.api.PaymentExecutionResult
 import io.github.chan808.reservation.payment.api.PaymentMethodType
 import io.github.chan808.reservation.payment.api.PaymentStatusView
-import io.github.chan808.reservation.product.api.ProductApi
-import io.github.chan808.reservation.product.api.StockReservationResult
 import io.mockk.Runs
 import io.mockk.every
 import io.mockk.just
@@ -33,14 +33,14 @@ class OrderServiceTest {
     private val orderRepository: OrderRepository = mockk()
     private val orderStatusHistoryRepository: OrderStatusHistoryRepository = mockk()
     private val memberApi: MemberApi = mockk()
-    private val productApi: ProductApi = mockk()
+    private val inventoryApi: InventoryApi = mockk()
     private val paymentApi: PaymentApi = mockk()
     private val eventPublisher: ApplicationEventPublisher = mockk()
     private val orderService = OrderService(
         orderRepository,
         orderStatusHistoryRepository,
         memberApi,
-        productApi,
+        inventoryApi,
         paymentApi,
         eventPublisher,
     )
@@ -65,7 +65,7 @@ class OrderServiceTest {
         every { memberApi.findAuthMemberById(1L) } returns memberView
         every { orderRepository.findByOrderRequestId("req-1") } returns null
         every { orderRepository.existsByMemberIdAndProductIdAndStatusIn(1L, 10L, any()) } returns false
-        every { productApi.reserveStock(any()) } returns StockReservationResult(10L, 2, 5000, 8)
+        every { inventoryApi.reserveStock(any()) } returns StockReservationResult(10L, 2, 5000, 8)
         every { orderRepository.save(any()) } answers { firstArg<Order>() }
         every { orderStatusHistoryRepository.save(any()) } answers { firstArg() }
         every { paymentApi.preparePayment(any()) } returns PaymentExecutionResult(
@@ -80,7 +80,7 @@ class OrderServiceTest {
         assertEquals(10000, response.totalPrice)
         assertEquals(OrderStatus.PENDING_PAYMENT, response.status)
         assertEquals(PaymentStatusView.READY, response.paymentStatus)
-        verify { productApi.reserveStock(any()) }
+        verify { inventoryApi.reserveStock(any()) }
         verify { paymentApi.preparePayment(any()) }
     }
 
@@ -123,7 +123,7 @@ class OrderServiceTest {
             redirectUrl = null,
             status = PaymentStatusView.CANCELED,
         )
-        every { productApi.releaseStock(10L, 2) } just Runs
+        every { inventoryApi.releaseStock(10L, 2) } just Runs
         every { orderStatusHistoryRepository.save(any()) } answers { firstArg() }
         every { paymentApi.getPayment(1L) } returns PaymentExecutionResult(
             paymentId = "pay-1",
@@ -134,7 +134,7 @@ class OrderServiceTest {
         val response = orderService.cancel(1L, 1L, CancelOrderRequest("changed mind"))
 
         assertEquals(OrderStatus.CANCELED, response.status)
-        verify { productApi.releaseStock(10L, 2) }
+        verify { inventoryApi.releaseStock(10L, 2) }
         verify { paymentApi.cancelPayment(1L, any()) }
     }
 
@@ -160,14 +160,14 @@ class OrderServiceTest {
             redirectUrl = null,
             status = PaymentStatusView.CANCELED,
         )
-        every { productApi.releaseStock(10L, 1) } just Runs
+        every { inventoryApi.releaseStock(10L, 1) } just Runs
         every { orderStatusHistoryRepository.save(any()) } answers { firstArg() }
 
         val count = orderService.expireTimedOutOrders(LocalDateTime.now())
 
         assertEquals(1, count)
         assertEquals(OrderStatus.EXPIRED, timedOut.status)
-        verify { productApi.releaseStock(10L, 1) }
+        verify { inventoryApi.releaseStock(10L, 1) }
     }
 
     @Test
@@ -198,7 +198,7 @@ class OrderServiceTest {
 
         assertEquals(PaymentStatusView.SUCCEEDED, result.status)
         assertEquals(OrderStatus.PAID, order.status)
-        verify(exactly = 0) { productApi.releaseStock(any(), any()) }
+        verify(exactly = 0) { inventoryApi.releaseStock(any(), any()) }
         verify { orderStatusHistoryRepository.save(any()) }
     }
 
@@ -225,14 +225,14 @@ class OrderServiceTest {
             status = PaymentStatusView.FAILED,
             reason = "PAYMENT_CONFIRM_FAILED",
         )
-        every { productApi.releaseStock(10L, 1) } just Runs
+        every { inventoryApi.releaseStock(10L, 1) } just Runs
         every { orderStatusHistoryRepository.save(any()) } answers { firstArg() }
 
         val result = orderService.confirmPayment(1L, 4L, ConfirmOrderPaymentRequest("pay-4", 10000))
 
         assertEquals(PaymentStatusView.FAILED, result.status)
         assertEquals(OrderStatus.PAYMENT_FAILED, order.status)
-        verify { productApi.releaseStock(10L, 1) }
+        verify { inventoryApi.releaseStock(10L, 1) }
         verify { orderStatusHistoryRepository.save(any()) }
     }
 }

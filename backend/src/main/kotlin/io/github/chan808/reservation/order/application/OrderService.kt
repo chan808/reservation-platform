@@ -3,6 +3,8 @@ package io.github.chan808.reservation.order.application
 import io.github.chan808.reservation.common.ErrorCode
 import io.github.chan808.reservation.common.MemberException
 import io.github.chan808.reservation.common.OrderException
+import io.github.chan808.reservation.inventory.api.InventoryApi
+import io.github.chan808.reservation.inventory.api.StockReservationCommand
 import io.github.chan808.reservation.member.api.MemberApi
 import io.github.chan808.reservation.order.api.OrderApi
 import io.github.chan808.reservation.order.api.OrderPaymentView
@@ -21,8 +23,7 @@ import io.github.chan808.reservation.payment.api.PaymentApi
 import io.github.chan808.reservation.payment.api.PaymentCommand
 import io.github.chan808.reservation.payment.api.PaymentConfirmCommand
 import io.github.chan808.reservation.payment.api.PaymentExecutionResult
-import io.github.chan808.reservation.product.api.ProductApi
-import io.github.chan808.reservation.product.api.StockReservationCommand
+import io.github.chan808.reservation.payment.api.PaymentStatusView
 import org.springframework.context.ApplicationEventPublisher
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -35,7 +36,7 @@ class OrderService(
     private val orderRepository: OrderRepository,
     private val orderStatusHistoryRepository: OrderStatusHistoryRepository,
     private val memberApi: MemberApi,
-    private val productApi: ProductApi,
+    private val inventoryApi: InventoryApi,
     private val paymentApi: PaymentApi,
     private val eventPublisher: ApplicationEventPublisher,
 ) : OrderApi {
@@ -55,7 +56,7 @@ class OrderService(
             throw OrderException(ErrorCode.DUPLICATE_ACTIVE_ORDER)
         }
 
-        val reservation = productApi.reserveStock(StockReservationCommand(request.productId, request.quantity))
+        val reservation = inventoryApi.reserveStock(StockReservationCommand(request.productId, request.quantity))
         val totalPrice = reservation.unitPrice * request.quantity
 
         val now = LocalDateTime.now()
@@ -119,7 +120,7 @@ class OrderService(
         val reason = request.reason?.trim()?.ifBlank { null } ?: "ORDER_CANCELED_BY_MEMBER"
         order.cancel(reason, LocalDateTime.now())
         paymentApi.cancelPayment(order.id, reason)
-        productApi.releaseStock(order.productId, order.quantity)
+        inventoryApi.releaseStock(order.productId, order.quantity)
         orderStatusHistoryRepository.save(
             OrderStatusHistory(
                 orderId = order.id,
@@ -152,7 +153,7 @@ class OrderService(
         )
 
         when (payment.status) {
-            io.github.chan808.reservation.payment.api.PaymentStatusView.SUCCEEDED -> {
+            PaymentStatusView.SUCCEEDED -> {
                 order.markPaid()
                 orderStatusHistoryRepository.save(
                     OrderStatusHistory(
@@ -165,10 +166,10 @@ class OrderService(
                     ),
                 )
             }
-            io.github.chan808.reservation.payment.api.PaymentStatusView.FAILED -> {
+            PaymentStatusView.FAILED -> {
                 val reason = payment.reason ?: "PAYMENT_CONFIRM_FAILED"
                 order.markPaymentFailed(reason)
-                productApi.releaseStock(order.productId, order.quantity)
+                inventoryApi.releaseStock(order.productId, order.quantity)
                 orderStatusHistoryRepository.save(
                     OrderStatusHistory(
                         orderId = order.id,
@@ -180,10 +181,10 @@ class OrderService(
                     ),
                 )
             }
-            io.github.chan808.reservation.payment.api.PaymentStatusView.CANCELED -> {
+            PaymentStatusView.CANCELED -> {
                 val reason = payment.reason ?: "PAYMENT_CANCELED"
                 order.cancel(reason, LocalDateTime.now())
-                productApi.releaseStock(order.productId, order.quantity)
+                inventoryApi.releaseStock(order.productId, order.quantity)
                 orderStatusHistoryRepository.save(
                     OrderStatusHistory(
                         orderId = order.id,
@@ -195,8 +196,8 @@ class OrderService(
                     ),
                 )
             }
-            io.github.chan808.reservation.payment.api.PaymentStatusView.READY,
-            io.github.chan808.reservation.payment.api.PaymentStatusView.PENDING -> {
+            PaymentStatusView.READY,
+            PaymentStatusView.PENDING -> {
                 throw OrderException(ErrorCode.PAYMENT_CONFIRM_FAILED)
             }
         }
@@ -210,7 +211,7 @@ class OrderService(
         targets.forEach { order ->
             order.expire(now)
             paymentApi.cancelPayment(order.id, "ORDER_EXPIRED")
-            productApi.releaseStock(order.productId, order.quantity)
+            inventoryApi.releaseStock(order.productId, order.quantity)
             orderStatusHistoryRepository.save(
                 OrderStatusHistory(
                     orderId = order.id,

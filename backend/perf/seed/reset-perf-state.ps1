@@ -31,6 +31,7 @@ $sqlTemplate = Get-Content -Path $sqlPath -Raw
 $sql = $sqlTemplate.Replace("__PERF_PRODUCT_ID__", $ProductId.ToString())
 $sql = $sql.Replace("__PERF_PRODUCT_STOCK__", $StockQuantity.ToString())
 $null = Invoke-ComposeMySql -Context $context -Sql $sql
+Clear-InventoryMirror -Context $context -ProductId $ProductId
 
 $productRow = Get-PerfProductRow -Context $context -ProductName $ProductName
 

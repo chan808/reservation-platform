@@ -67,6 +67,9 @@ $sql = $sql.Replace("__PERF_PRODUCT_NAME__", (Escape-SqlString -Value $ProductNa
 $sql = $sql.Replace("__PERF_PRODUCT_STOCK__", $StockQuantity.ToString())
 $null = Invoke-ComposeMySql -Context $context -Sql $sql
 $product = Get-PerfProductRow -Context $context -ProductName $ProductName
+if ($product) {
+    Clear-InventoryMirror -Context $context -ProductId $product.Id
+}
 
 Write-Host "Perf seed applied."
 Write-Host "users.csv: $usersCsvFullPath"

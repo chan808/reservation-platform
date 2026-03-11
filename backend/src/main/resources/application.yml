@@ -104,6 +104,10 @@ app:
     timeout:
       enabled: ${ORDER_TIMEOUT_ENABLED:true}
       cron: ${ORDER_TIMEOUT_CRON:0 * * * * *}
+  inventory:
+    mode: ${APP_INVENTORY_MODE:db-lock}
+    redis:
+      sync-delay-ms: ${APP_INVENTORY_REDIS_SYNC_DELAY_MS:1000}
   name: ${APP_NAME:application}
 
 payment:

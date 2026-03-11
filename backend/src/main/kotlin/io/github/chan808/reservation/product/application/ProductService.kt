@@ -5,8 +5,6 @@ import io.github.chan808.reservation.common.PageResponse
 import io.github.chan808.reservation.common.ProductException
 import io.github.chan808.reservation.product.api.ProductApi
 import io.github.chan808.reservation.product.api.ProductSaleView
-import io.github.chan808.reservation.product.api.StockReservationCommand
-import io.github.chan808.reservation.product.api.StockReservationResult
 import io.github.chan808.reservation.product.domain.Product
 import io.github.chan808.reservation.product.infrastructure.persistence.ProductRepository
 import io.github.chan808.reservation.product.presentation.CreateProductRequest
@@ -70,27 +68,6 @@ class ProductService(
         )
     }
 
-    @Transactional
-    override fun reserveStock(command: StockReservationCommand): StockReservationResult {
-        val product = getProductForUpdate(command.productId)
-        product.reserve(command.quantity, LocalDateTime.now())
-        return StockReservationResult(
-            productId = product.id,
-            reservedQuantity = command.quantity,
-            unitPrice = product.price,
-            remainingStock = product.stockQuantity,
-        )
-    }
-
-    @Transactional
-    override fun releaseStock(productId: Long, quantity: Int) {
-        val product = getProductForUpdate(productId)
-        product.release(quantity, LocalDateTime.now())
-    }
-
     private fun getProduct(productId: Long): Product =
         productRepository.findById(productId).orElseThrow { ProductException(ErrorCode.PRODUCT_NOT_FOUND) }
-
-    private fun getProductForUpdate(productId: Long): Product =
-        productRepository.findByIdForUpdate(productId) ?: throw ProductException(ErrorCode.PRODUCT_NOT_FOUND)
 }
