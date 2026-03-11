@@ -53,6 +53,7 @@ class ProductServiceTest {
 
         val result = productService.reserveStock(StockReservationCommand(1L, 2))
 
+        assertEquals(1000, result.unitPrice)
         assertEquals(3, result.remainingStock)
     }
 

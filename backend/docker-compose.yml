@@ -69,6 +69,19 @@ services:
     networks:
       - auth-network
 
+  k6:
+    image: grafana/k6:0.49.0
+    restart: "no"
+    profiles:
+      - loadtest
+    working_dir: /scripts
+    volumes:
+      - ./perf:/scripts
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - auth-network
+
 networks:
   auth-network:
     driver: bridge

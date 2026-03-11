@@ -5,6 +5,6 @@ package io.github.chan808.reservation.order
 import org.springframework.modulith.ApplicationModule
 
 @ApplicationModule(
-    allowedDependencies = ["member :: api", "product :: api", "payment :: api", "payment :: events", "common"],
+    allowedDependencies = ["member :: api", "product :: api", "payment :: api", "common"],
 )
 class OrderModule

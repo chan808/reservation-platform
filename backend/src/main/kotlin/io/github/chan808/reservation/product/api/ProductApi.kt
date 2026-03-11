@@ -26,6 +26,7 @@ data class StockReservationCommand(
 data class StockReservationResult(
     val productId: Long,
     val reservedQuantity: Int,
+    val unitPrice: Long,
     val remainingStock: Int,
 )
 

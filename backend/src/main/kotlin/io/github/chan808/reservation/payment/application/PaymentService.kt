@@ -84,7 +84,7 @@ class PaymentService(
             }
             PaymentStatusView.READY, PaymentStatusView.PENDING -> throw PaymentException(ErrorCode.PAYMENT_CONFIRM_FAILED)
         }
-        return payment.toResult()
+        return paymentRepository.saveAndFlush(payment).toResult()
     }
 
     @Transactional
@@ -100,7 +100,7 @@ class PaymentService(
             payment.rawResponse = gatewayResult.rawResponse
         }
         payment.cancel(reason, LocalDateTime.now())
-        return payment.toResult()
+        return paymentRepository.saveAndFlush(payment).toResult()
     }
 
     override fun getPayment(orderId: Long): PaymentExecutionResult? =
@@ -147,6 +147,7 @@ class PaymentService(
             }
             PaymentStatusView.READY, PaymentStatusView.PENDING -> return
         }
+        paymentRepository.saveAndFlush(payment)
         webhook.markProcessed(now)
     }
 
@@ -163,6 +164,7 @@ private fun Payment.toResult(redirectUrl: String? = null): PaymentExecutionResul
         paymentId = paymentKey ?: id.toString(),
         redirectUrl = redirectUrl,
         status = status.toView(),
+        reason = failureMessage,
     )
 
 private fun PaymentStatus.toView(): PaymentStatusView =

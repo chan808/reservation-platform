@@ -9,14 +9,13 @@ import io.github.chan808.reservation.order.domain.OrderStatus
 import io.github.chan808.reservation.order.infrastructure.persistence.OrderRepository
 import io.github.chan808.reservation.order.infrastructure.persistence.OrderStatusHistoryRepository
 import io.github.chan808.reservation.order.presentation.CancelOrderRequest
+import io.github.chan808.reservation.order.presentation.ConfirmOrderPaymentRequest
 import io.github.chan808.reservation.order.presentation.CreateOrderRequest
 import io.github.chan808.reservation.payment.api.PaymentApi
 import io.github.chan808.reservation.payment.api.PaymentExecutionResult
 import io.github.chan808.reservation.payment.api.PaymentMethodType
 import io.github.chan808.reservation.payment.api.PaymentStatusView
 import io.github.chan808.reservation.product.api.ProductApi
-import io.github.chan808.reservation.product.api.ProductSaleStatus
-import io.github.chan808.reservation.product.api.ProductSaleView
 import io.github.chan808.reservation.product.api.StockReservationResult
 import io.mockk.Runs
 import io.mockk.every
@@ -66,16 +65,7 @@ class OrderServiceTest {
         every { memberApi.findAuthMemberById(1L) } returns memberView
         every { orderRepository.findByOrderRequestId("req-1") } returns null
         every { orderRepository.existsByMemberIdAndProductIdAndStatusIn(1L, 10L, any()) } returns false
-        every { productApi.getSaleProduct(10L) } returns ProductSaleView(
-            id = 10L,
-            name = "Limited",
-            price = 5000,
-            status = ProductSaleStatus.ON_SALE,
-            availableStock = 10,
-            saleStartAt = LocalDateTime.now().minusMinutes(10),
-            saleEndAt = null,
-        )
-        every { productApi.reserveStock(any()) } returns StockReservationResult(10L, 2, 8)
+        every { productApi.reserveStock(any()) } returns StockReservationResult(10L, 2, 5000, 8)
         every { orderRepository.save(any()) } answers { firstArg<Order>() }
         every { orderStatusHistoryRepository.save(any()) } answers { firstArg() }
         every { paymentApi.preparePayment(any()) } returns PaymentExecutionResult(
@@ -178,5 +168,71 @@ class OrderServiceTest {
         assertEquals(1, count)
         assertEquals(OrderStatus.EXPIRED, timedOut.status)
         verify { productApi.releaseStock(10L, 1) }
+    }
+
+    @Test
+    fun `confirmPayment updates order synchronously when payment succeeds`() {
+        val order = Order(
+            orderNumber = "ORD-3",
+            memberId = 1L,
+            productId = 10L,
+            orderRequestId = "req-3",
+            quantity = 1,
+            unitPrice = 10000,
+            totalPrice = 10000,
+            status = OrderStatus.PENDING_PAYMENT,
+            paymentType = PaymentMethodType.PAYPAL,
+            paymentDeadlineAt = LocalDateTime.now().plusMinutes(15),
+            orderedAt = LocalDateTime.now(),
+            id = 3L,
+        )
+        every { orderRepository.findByIdAndMemberId(3L, 1L) } returns order
+        every { paymentApi.confirmPayment(any()) } returns PaymentExecutionResult(
+            paymentId = "pay-3",
+            redirectUrl = null,
+            status = PaymentStatusView.SUCCEEDED,
+        )
+        every { orderStatusHistoryRepository.save(any()) } answers { firstArg() }
+
+        val result = orderService.confirmPayment(1L, 3L, ConfirmOrderPaymentRequest("pay-3", 10000))
+
+        assertEquals(PaymentStatusView.SUCCEEDED, result.status)
+        assertEquals(OrderStatus.PAID, order.status)
+        verify(exactly = 0) { productApi.releaseStock(any(), any()) }
+        verify { orderStatusHistoryRepository.save(any()) }
+    }
+
+    @Test
+    fun `confirmPayment releases stock synchronously when payment fails`() {
+        val order = Order(
+            orderNumber = "ORD-4",
+            memberId = 1L,
+            productId = 10L,
+            orderRequestId = "req-4",
+            quantity = 1,
+            unitPrice = 10000,
+            totalPrice = 10000,
+            status = OrderStatus.PENDING_PAYMENT,
+            paymentType = PaymentMethodType.PAYPAL,
+            paymentDeadlineAt = LocalDateTime.now().plusMinutes(15),
+            orderedAt = LocalDateTime.now(),
+            id = 4L,
+        )
+        every { orderRepository.findByIdAndMemberId(4L, 1L) } returns order
+        every { paymentApi.confirmPayment(any()) } returns PaymentExecutionResult(
+            paymentId = "pay-4",
+            redirectUrl = null,
+            status = PaymentStatusView.FAILED,
+            reason = "PAYMENT_CONFIRM_FAILED",
+        )
+        every { productApi.releaseStock(10L, 1) } just Runs
+        every { orderStatusHistoryRepository.save(any()) } answers { firstArg() }
+
+        val result = orderService.confirmPayment(1L, 4L, ConfirmOrderPaymentRequest("pay-4", 10000))
+
+        assertEquals(PaymentStatusView.FAILED, result.status)
+        assertEquals(OrderStatus.PAYMENT_FAILED, order.status)
+        verify { productApi.releaseStock(10L, 1) }
+        verify { orderStatusHistoryRepository.save(any()) }
     }
 }

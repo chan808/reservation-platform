@@ -89,6 +89,7 @@ class PaymentServiceTest {
             status = PaymentStatusView.SUCCEEDED,
             rawResponse = """{"status":"DONE"}""",
         )
+        every { paymentRepository.saveAndFlush(payment) } returns payment
         every { eventPublisher.publishEvent(any<Any>()) } just Runs
 
         val result = service.confirmPayment(PaymentConfirmCommand(1L, "ORD-1", "real-key", 10000))
@@ -113,6 +114,7 @@ class PaymentServiceTest {
         every { paymentWebhookRepository.findByProviderAndExternalEventId("TOSS", "evt-1") } returns null
         every { paymentWebhookRepository.save(any()) } answers { firstArg() }
         every { paymentRepository.findByPaymentKey("toss-1") } returns payment
+        every { paymentRepository.saveAndFlush(payment) } returns payment
         every { eventPublisher.publishEvent(any<Any>()) } just Runs
 
         service.handleWebhook(

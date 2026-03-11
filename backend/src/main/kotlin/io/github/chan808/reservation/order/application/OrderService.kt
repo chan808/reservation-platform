@@ -55,8 +55,8 @@ class OrderService(
             throw OrderException(ErrorCode.DUPLICATE_ACTIVE_ORDER)
         }
 
-        val product = productApi.getSaleProduct(request.productId)
-        productApi.reserveStock(StockReservationCommand(request.productId, request.quantity))
+        val reservation = productApi.reserveStock(StockReservationCommand(request.productId, request.quantity))
+        val totalPrice = reservation.unitPrice * request.quantity
 
         val now = LocalDateTime.now()
         val order = orderRepository.save(
@@ -66,8 +66,8 @@ class OrderService(
                 productId = request.productId,
                 orderRequestId = request.orderRequestId,
                 quantity = request.quantity,
-                unitPrice = product.price,
-                totalPrice = product.price * request.quantity,
+                unitPrice = reservation.unitPrice,
+                totalPrice = totalPrice,
                 status = OrderStatus.PENDING_PAYMENT,
                 paymentType = request.paymentType,
                 paymentDeadlineAt = now.plusMinutes(15),
@@ -133,6 +133,7 @@ class OrderService(
         return OrderResponse.from(order, paymentApi.getPayment(order.id))
     }
 
+    @Transactional
     fun confirmPayment(memberId: Long, orderId: Long, request: ConfirmOrderPaymentRequest): PaymentExecutionResult {
         val order = getOwnedOrder(memberId, orderId)
         if (order.status != OrderStatus.PENDING_PAYMENT) {
@@ -141,7 +142,7 @@ class OrderService(
         if (order.totalPrice != request.amount) {
             throw OrderException(ErrorCode.PAYMENT_AMOUNT_MISMATCH)
         }
-        return paymentApi.confirmPayment(
+        val payment = paymentApi.confirmPayment(
             PaymentConfirmCommand(
                 orderId = order.id,
                 orderNumber = order.orderNumber,
@@ -149,6 +150,58 @@ class OrderService(
                 amount = request.amount,
             ),
         )
+
+        when (payment.status) {
+            io.github.chan808.reservation.payment.api.PaymentStatusView.SUCCEEDED -> {
+                order.markPaid()
+                orderStatusHistoryRepository.save(
+                    OrderStatusHistory(
+                        orderId = order.id,
+                        fromStatus = OrderStatus.PENDING_PAYMENT.name,
+                        toStatus = order.status.name,
+                        reason = "PAYMENT_SUCCEEDED",
+                        actorType = "PAYMENT",
+                        actorId = payment.paymentId,
+                    ),
+                )
+            }
+            io.github.chan808.reservation.payment.api.PaymentStatusView.FAILED -> {
+                val reason = payment.reason ?: "PAYMENT_CONFIRM_FAILED"
+                order.markPaymentFailed(reason)
+                productApi.releaseStock(order.productId, order.quantity)
+                orderStatusHistoryRepository.save(
+                    OrderStatusHistory(
+                        orderId = order.id,
+                        fromStatus = OrderStatus.PENDING_PAYMENT.name,
+                        toStatus = order.status.name,
+                        reason = reason,
+                        actorType = "PAYMENT",
+                        actorId = payment.paymentId,
+                    ),
+                )
+            }
+            io.github.chan808.reservation.payment.api.PaymentStatusView.CANCELED -> {
+                val reason = payment.reason ?: "PAYMENT_CANCELED"
+                order.cancel(reason, LocalDateTime.now())
+                productApi.releaseStock(order.productId, order.quantity)
+                orderStatusHistoryRepository.save(
+                    OrderStatusHistory(
+                        orderId = order.id,
+                        fromStatus = OrderStatus.PENDING_PAYMENT.name,
+                        toStatus = order.status.name,
+                        reason = reason,
+                        actorType = "PAYMENT",
+                        actorId = payment.paymentId,
+                    ),
+                )
+            }
+            io.github.chan808.reservation.payment.api.PaymentStatusView.READY,
+            io.github.chan808.reservation.payment.api.PaymentStatusView.PENDING -> {
+                throw OrderException(ErrorCode.PAYMENT_CONFIRM_FAILED)
+            }
+        }
+
+        return payment
     }
 
     @Transactional

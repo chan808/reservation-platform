@@ -20,6 +20,7 @@ data class PaymentExecutionResult(
     val paymentId: String?,
     val redirectUrl: String?,
     val status: PaymentStatusView,
+    val reason: String? = null,
 )
 
 data class PaymentConfirmCommand(

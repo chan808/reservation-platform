@@ -77,6 +77,7 @@ class ProductService(
         return StockReservationResult(
             productId = product.id,
             reservedQuantity = command.quantity,
+            unitPrice = product.price,
             remainingStock = product.stockQuantity,
         )
     }
