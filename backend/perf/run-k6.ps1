@@ -194,8 +194,13 @@ Write-Host "summary: $summaryFileHost"
 
 & docker @dockerArgs
 
-if ($LASTEXITCODE -ne 0) {
-    throw "k6 execution failed."
+$dockerExitCode = $LASTEXITCODE
+
+if ($dockerExitCode -ne 0) {
+    if (Test-Path $summaryFileHost) {
+        throw "k6 execution failed with exit code $dockerExitCode after summary generation. This usually means a threshold failure. summary=$summaryFileHost"
+    }
+    throw "k6 execution failed with exit code $dockerExitCode before summary generation. Check the k6 output above for the actual setup or runtime error."
 }
 
 Write-Host "k6 execution completed."

@@ -443,28 +443,24 @@ function buildOptions() {
   };
 
   if (scenarioMode === 'burst') {
-    return {
-      ...base,
-      scenarios: {
-        default: {
-          executor: 'ramping-vus',
-          startVUs: 0,
-          stages: [
-            { duration: burstRampUp, target: targetVus },
-            { duration: burstHold, target: targetVus },
-            { duration: burstRampDown, target: 0 },
-          ],
-          gracefulRampDown: '0s',
-        },
+    base.scenarios = {
+      default: {
+        executor: 'ramping-vus',
+        startVUs: 0,
+        stages: [
+          { duration: burstRampUp, target: targetVus },
+          { duration: burstHold, target: targetVus },
+          { duration: burstRampDown, target: 0 },
+        ],
+        gracefulRampDown: '0s',
       },
     };
+    return base;
   }
 
-  return {
-    ...base,
-    vus: targetVus,
-    duration,
-  };
+  base.vus = targetVus;
+  base.duration = duration;
+  return base;
 }
 
 function formatNumber(value, decimals) {
