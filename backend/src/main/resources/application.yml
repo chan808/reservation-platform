@@ -100,7 +100,17 @@ app:
         enabled: ${UNVERIFIED_MEMBER_CLEANUP_ENABLED:true}
         age-days: ${UNVERIFIED_MEMBER_CLEANUP_AGE_DAYS:7}
         cron: ${UNVERIFIED_MEMBER_CLEANUP_CRON:0 0 3 * * *}
+  order:
+    timeout:
+      enabled: ${ORDER_TIMEOUT_ENABLED:true}
+      cron: ${ORDER_TIMEOUT_CRON:0 * * * * *}
   name: ${APP_NAME:application}
+
+payment:
+  toss:
+    secret-key: ${TOSS_SECRET_KEY:}
+    client-key: ${TOSS_CLIENT_KEY:}
+    base-url: ${TOSS_BASE_URL:https://api.tosspayments.com}
 
 management:
   endpoints:
