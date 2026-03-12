@@ -62,6 +62,13 @@ class Order(
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     val id: Long = 0L,
 ) : BaseEntity() {
+    fun markPaymentProcessing() {
+        if (status != OrderStatus.PENDING_PAYMENT) {
+            throw OrderException(ErrorCode.PAYMENT_CONFIRM_NOT_ALLOWED)
+        }
+        status = OrderStatus.PAYMENT_PROCESSING
+    }
+
     fun markPaid() {
         status = OrderStatus.PAID
         cancelReason = null
@@ -75,6 +82,16 @@ class Order(
 
     fun cancel(reason: String, now: LocalDateTime) {
         if (status != OrderStatus.PENDING_PAYMENT) {
+            throw OrderException(ErrorCode.ORDER_CANNOT_CANCEL)
+        }
+        status = OrderStatus.CANCELED
+        canceledAt = now
+        cancelReason = reason
+    }
+
+    fun markPaymentCanceled(reason: String, now: LocalDateTime) {
+        if (status == OrderStatus.CANCELED) return
+        if (status !in setOf(OrderStatus.PENDING_PAYMENT, OrderStatus.PAYMENT_PROCESSING)) {
             throw OrderException(ErrorCode.ORDER_CANNOT_CANCEL)
         }
         status = OrderStatus.CANCELED

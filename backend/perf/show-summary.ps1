@@ -52,6 +52,5 @@ Write-Host "flowP99: $(Read-MetricValue $summary.metrics.order_flow_duration 'p(
 Write-Host "productLookupFailures: $(Read-MetricValue $summary.metrics.product_lookup_failures 'count')"
 Write-Host "orderCreateFailures: $(Read-MetricValue $summary.metrics.order_create_failures 'count')"
 Write-Host "paymentConfirmFailures: $(Read-MetricValue $summary.metrics.payment_confirm_failures 'count')"
-Write-Host "orderVerifyFailures: $(Read-MetricValue $summary.metrics.order_verify_failures 'count')"
 Write-Host "businessErrors: $(Read-MetricValue $summary.metrics.business_errors 'count')"
 Write-Host "soldOutErrors: $(Read-MetricValue $summary.metrics.sold_out_errors 'count')"

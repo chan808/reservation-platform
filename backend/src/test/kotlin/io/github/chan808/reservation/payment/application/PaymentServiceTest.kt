@@ -2,7 +2,6 @@ package io.github.chan808.reservation.payment.application
 
 import io.github.chan808.reservation.payment.api.PaymentCommand
 import io.github.chan808.reservation.payment.api.PaymentConfirmCommand
-import io.github.chan808.reservation.payment.api.PaymentExecutionResult
 import io.github.chan808.reservation.payment.api.PaymentMethodType
 import io.github.chan808.reservation.payment.api.PaymentStatusView
 import io.github.chan808.reservation.payment.api.PaymentWebhookRequest
@@ -13,32 +12,33 @@ import io.github.chan808.reservation.payment.application.gateway.PaymentGateway
 import io.github.chan808.reservation.payment.application.gateway.PaymentGatewayRegistry
 import io.github.chan808.reservation.payment.domain.Payment
 import io.github.chan808.reservation.payment.domain.PaymentStatus
+import io.github.chan808.reservation.payment.infrastructure.persistence.PaymentOutboxMessage
+import io.github.chan808.reservation.payment.infrastructure.persistence.PaymentOutboxRepository
 import io.github.chan808.reservation.payment.infrastructure.persistence.PaymentRepository
 import io.github.chan808.reservation.payment.infrastructure.persistence.PaymentWebhookRepository
-import io.mockk.Runs
 import io.mockk.every
-import io.mockk.just
 import io.mockk.mockk
 import io.mockk.verify
 import org.junit.jupiter.api.Test
-import org.springframework.context.ApplicationEventPublisher
 import tools.jackson.databind.ObjectMapper
 import java.time.LocalDateTime
 import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
 
 class PaymentServiceTest {
 
     private val paymentRepository: PaymentRepository = mockk()
     private val paymentWebhookRepository: PaymentWebhookRepository = mockk()
+    private val paymentOutboxRepository: PaymentOutboxRepository = mockk()
     private val gatewayRegistry: PaymentGatewayRegistry = mockk()
     private val objectMapper = ObjectMapper()
-    private val eventPublisher: ApplicationEventPublisher = mockk()
     private val service = PaymentService(
         paymentRepository,
         paymentWebhookRepository,
+        paymentOutboxRepository,
         gatewayRegistry,
         objectMapper,
-        eventPublisher,
+        "payment-result.v1",
     )
 
     @Test
@@ -62,7 +62,7 @@ class PaymentServiceTest {
     }
 
     @Test
-    fun `confirmPayment uses gateway confirm and updates payment`() {
+    fun `confirmPayment uses gateway confirm and enqueues outbox event`() {
         val gateway = mockk<PaymentGateway>()
         val payment = Payment(
             orderId = 1L,
@@ -74,6 +74,7 @@ class PaymentServiceTest {
             requestedAt = LocalDateTime.now(),
             id = 1L,
         )
+        val outboxSlot = mutableListOf<PaymentOutboxMessage>()
         every { paymentRepository.findByOrderId(1L) } returns payment
         every { gatewayRegistry.get(PaymentMethodType.TOSS) } returns gateway
         every {
@@ -90,17 +91,20 @@ class PaymentServiceTest {
             rawResponse = """{"status":"DONE"}""",
         )
         every { paymentRepository.saveAndFlush(payment) } returns payment
-        every { eventPublisher.publishEvent(any<Any>()) } just Runs
+        every { paymentOutboxRepository.save(capture(outboxSlot)) } answers { firstArg() }
 
         val result = service.confirmPayment(PaymentConfirmCommand(1L, "ORD-1", "real-key", 10000))
 
         assertEquals(PaymentStatusView.SUCCEEDED, result.status)
         assertEquals("real-key", payment.paymentKey)
         assertEquals(PaymentStatus.SUCCEEDED, payment.status)
+        assertEquals(1, outboxSlot.size)
+        assertEquals("payment-result.v1", outboxSlot.first().topic)
+        assertEquals("SUCCEEDED", outboxSlot.first().eventType)
     }
 
     @Test
-    fun `handleWebhook success updates payment and publishes event`() {
+    fun `handleWebhook success updates payment and enqueues outbox event`() {
         val payment = Payment(
             orderId = 1L,
             paymentType = PaymentMethodType.TOSS,
@@ -111,11 +115,12 @@ class PaymentServiceTest {
             requestedAt = LocalDateTime.now(),
             id = 1L,
         )
+        val outboxSlot = mutableListOf<PaymentOutboxMessage>()
         every { paymentWebhookRepository.findByProviderAndExternalEventId("TOSS", "evt-1") } returns null
         every { paymentWebhookRepository.save(any()) } answers { firstArg() }
         every { paymentRepository.findByPaymentKey("toss-1") } returns payment
         every { paymentRepository.saveAndFlush(payment) } returns payment
-        every { eventPublisher.publishEvent(any<Any>()) } just Runs
+        every { paymentOutboxRepository.save(capture(outboxSlot)) } answers { firstArg() }
 
         service.handleWebhook(
             PaymentMethodType.TOSS,
@@ -129,6 +134,9 @@ class PaymentServiceTest {
         )
 
         assertEquals(PaymentStatus.SUCCEEDED, payment.status)
-        verify { eventPublisher.publishEvent(any<Any>()) }
+        assertEquals(1, outboxSlot.size)
+        assertEquals("SUCCEEDED", outboxSlot.first().eventType)
+        assertNotNull(outboxSlot.first().payload)
+        verify { paymentOutboxRepository.save(any()) }
     }
 }

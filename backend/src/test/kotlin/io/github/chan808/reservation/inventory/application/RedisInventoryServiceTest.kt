@@ -84,9 +84,8 @@ class RedisInventoryServiceTest {
         redisInventoryService.reserveStock(StockReservationCommand(1L, 1))
         redisInventoryService.releaseStock(1L, 1)
 
-        val stock = redisTemplate.opsForHash()
+        val stock = redisTemplate.opsForHash<String, String>()
             .get(RedisInventoryKeys.productKey(1L), "stockQuantity")
-            ?.toString()
 
         assertEquals("2", stock)
     }

@@ -33,6 +33,14 @@ services:
     networks:
       - auth-network
 
+  kafka:
+    image: apache/kafka:4.1.1
+    restart: always
+    ports:
+      - "9092:9092"
+    networks:
+      - auth-network
+
   prometheus:
     image: prom/prometheus:v3.2.1
     restart: unless-stopped

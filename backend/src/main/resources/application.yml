@@ -27,6 +27,16 @@ spring:
       port: ${REDIS_PORT:6379}
       password: ${REDIS_PASSWORD:redis_pass}
       timeout: 2000ms
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      acks: all
+    consumer:
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      auto-offset-reset: earliest
   mail:
     host: ${MAIL_HOST:smtp.gmail.com}
     port: ${MAIL_PORT:587}
@@ -108,6 +118,14 @@ app:
     mode: ${APP_INVENTORY_MODE:db-lock}
     redis:
       sync-delay-ms: ${APP_INVENTORY_REDIS_SYNC_DELAY_MS:1000}
+  payment:
+    kafka:
+      enabled: ${APP_PAYMENT_KAFKA_ENABLED:true}
+      topic: ${APP_PAYMENT_KAFKA_TOPIC:payment-result.v1}
+      consumer-group: ${APP_PAYMENT_KAFKA_CONSUMER_GROUP:order-payment-result}
+      publisher-delay-ms: ${APP_PAYMENT_KAFKA_PUBLISHER_DELAY_MS:500}
+      publisher-batch-size: ${APP_PAYMENT_KAFKA_PUBLISHER_BATCH_SIZE:100}
+      max-attempts: ${APP_PAYMENT_KAFKA_MAX_ATTEMPTS:20}
   name: ${APP_NAME:application}
 
 payment:

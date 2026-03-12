@@ -169,6 +169,10 @@ Command:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\perf\run-k6.ps1 -Vus 1000 -UseTokens -ResetState -ScenarioMode burst -BurstRampUp 5s -BurstHold 30s -BurstRampDown 5s -StockQuantity 1000000
+powershell -ExecutionPolicy Bypass -File .\perf\run-k6.ps1 -Vus 1500 -UseTokens -ResetState -ScenarioMode burst -BurstRampUp 5s -BurstHold 30s -BurstRampDown 5s -StockQuantity 1000000
+powershell -ExecutionPolicy Bypass -File .\perf\run-k6.ps1 -Vus 2000 -UseTokens -ResetState -ScenarioMode burst -BurstRampUp 5s -BurstHold 30s -BurstRampDown 5s -StockQuantity 1000000
+powershell -ExecutionPolicy Bypass -File .\perf\run-k6.ps1 -Vus 3000 -UseTokens -ResetState -ScenarioMode burst -BurstRampUp 5s -BurstHold 30s -BurstRampDown 5s -StockQuantity 1000000
+powershell -ExecutionPolicy Bypass -File .\perf\run-k6.ps1 -Vus 5000 -UseTokens -ResetState -ScenarioMode burst -BurstRampUp 5s -BurstHold 30s -BurstRampDown 5s -StockQuantity 1000000
 ```
 
 This is closer to:
@@ -219,7 +223,7 @@ docker compose --profile loadtest run --rm `
   -e PRODUCT_ID=1 `
   -e INITIAL_STOCK=1000000 `
   -e ORDER_QUANTITY=1 `
-  -e SUMMARY_FILE=/scripts/results/order-flow-1500vu-20260311-205105.json `
+  -e SUMMARY_FILE=/scripts/results/order-flow-2000vu-20260312-090727.json `
   k6 run /scripts/k6/stock-check.js
 ```
 
@@ -243,6 +247,4 @@ powershell -ExecutionPolicy Bypass -File .\perf\show-summary.ps1
 powershell -ExecutionPolicy Bypass -File .\perf\run-k6.ps1 -Vus 1500 -UseTokens -ResetState -StockQuantity 1000000
 powershell -ExecutionPolicy Bypass -File .\perf\show-summary.ps1
 
-powershell -ExecutionPolicy Bypass -File .\perf\run-k6.ps1 -Vus 2000 -UseTokens -ResetState -StockQuantity 1000000
-powershell -ExecutionPolicy Bypass -File .\perf\show-summary.ps1
 ```

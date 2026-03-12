@@ -29,14 +29,12 @@ const authFailures = new Counter('auth_failures');
 const productLookupFailures = new Counter('product_lookup_failures');
 const orderCreateFailures = new Counter('order_create_failures');
 const paymentConfirmFailures = new Counter('payment_confirm_failures');
-const orderVerifyFailures = new Counter('order_verify_failures');
 const stockNegativeChecks = new Rate('stock_negative_rate');
 const orderFlowSuccessRate = new Rate('order_flow_success_rate');
 const loginDuration = new Trend('login_duration', true);
 const productLookupDuration = new Trend('product_lookup_duration', true);
 const orderCreateDuration = new Trend('order_create_duration', true);
 const paymentConfirmDuration = new Trend('payment_confirm_duration', true);
-const orderVerifyDuration = new Trend('order_verify_duration', true);
 const orderFlowDuration = new Trend('order_flow_duration', true);
 
 const users = new SharedArray('load-test-users', () => parseCsv(usersCsvPath, ['email', 'password']));
@@ -193,38 +191,6 @@ export default function () {
     return;
   }
 
-  const confirmBody = parseJson(paymentConfirm, 'payment confirm');
-  const paymentResult = confirmBody && confirmBody.data;
-  if (!paymentResult || paymentResult.status !== 'SUCCEEDED') {
-    paymentConfirmFailures.add(1);
-    businessErrors.add(1);
-    orderFlowSuccessRate.add(false);
-    return;
-  }
-
-  const orderVerify = http.get(`${baseUrl}/api/orders/${createdOrder.id}`, {
-    headers: authHeaders,
-    tags: { name: 'order_get' },
-    timeout: requestTimeout,
-  });
-  orderVerifyDuration.add(orderVerify.timings.duration);
-
-  if (!check(orderVerify, { 'order verify status is 200': (response) => response.status === 200 })) {
-    orderVerifyFailures.add(1);
-    recordFailure(orderVerify);
-    orderFlowSuccessRate.add(false);
-    return;
-  }
-
-  const verifiedOrderBody = parseJson(orderVerify, 'order verify');
-  const verifiedOrder = verifiedOrderBody && verifiedOrderBody.data;
-  if (!verifiedOrder || verifiedOrder.status !== 'PAID' || verifiedOrder.paymentStatus !== 'SUCCEEDED') {
-    orderVerifyFailures.add(1);
-    businessErrors.add(1);
-    orderFlowSuccessRate.add(false);
-    return;
-  }
-
   paymentsConfirmed.add(1);
   completedFlows.add(1);
   orderFlowSuccessRate.add(true);
@@ -266,13 +232,11 @@ export function handleSummary(data) {
       product_lookup_failures: metricValues(data, 'product_lookup_failures'),
       order_create_failures: metricValues(data, 'order_create_failures'),
       payment_confirm_failures: metricValues(data, 'payment_confirm_failures'),
-      order_verify_failures: metricValues(data, 'order_verify_failures'),
       stock_negative_rate: metricValues(data, 'stock_negative_rate'),
       login_duration: metricValues(data, 'login_duration'),
       product_lookup_duration: metricValues(data, 'product_lookup_duration'),
       order_create_duration: metricValues(data, 'order_create_duration'),
       payment_confirm_duration: metricValues(data, 'payment_confirm_duration'),
-      order_verify_duration: metricValues(data, 'order_verify_duration'),
       order_flow_duration: metricValues(data, 'order_flow_duration'),
     },
   };
@@ -288,7 +252,6 @@ export function handleSummary(data) {
     `product lookup failures: ${formatNumber(summary.metrics.product_lookup_failures.count, 0)}`,
     `order create failures: ${formatNumber(summary.metrics.order_create_failures.count, 0)}`,
     `payment confirm failures: ${formatNumber(summary.metrics.payment_confirm_failures.count, 0)}`,
-    `order verify failures: ${formatNumber(summary.metrics.order_verify_failures.count, 0)}`,
   ];
 
   return {

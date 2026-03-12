@@ -15,25 +15,28 @@ import io.github.chan808.reservation.payment.application.gateway.PaymentGatewayR
 import io.github.chan808.reservation.payment.domain.Payment
 import io.github.chan808.reservation.payment.domain.PaymentStatus
 import io.github.chan808.reservation.payment.domain.PaymentWebhook
+import io.github.chan808.reservation.payment.events.PaymentResultEvent
+import io.github.chan808.reservation.payment.events.PaymentResultEventType
+import io.github.chan808.reservation.payment.infrastructure.persistence.PaymentOutboxMessage
+import io.github.chan808.reservation.payment.infrastructure.persistence.PaymentOutboxRepository
 import io.github.chan808.reservation.payment.infrastructure.persistence.PaymentRepository
 import io.github.chan808.reservation.payment.infrastructure.persistence.PaymentWebhookRepository
-import io.github.chan808.reservation.payment.events.PaymentCanceledEvent
-import io.github.chan808.reservation.payment.events.PaymentFailedEvent
-import io.github.chan808.reservation.payment.events.PaymentSucceededEvent
-import org.springframework.context.ApplicationEventPublisher
+import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import tools.jackson.databind.ObjectMapper
 import java.time.LocalDateTime
+import java.util.UUID
 
 @Service
 @Transactional(readOnly = true)
 class PaymentService(
     private val paymentRepository: PaymentRepository,
     private val paymentWebhookRepository: PaymentWebhookRepository,
+    private val paymentOutboxRepository: PaymentOutboxRepository,
     private val paymentGatewayRegistry: PaymentGatewayRegistry,
     private val objectMapper: ObjectMapper,
-    private val eventPublisher: ApplicationEventPublisher,
+    @Value("\${app.payment.kafka.topic:payment-result.v1}") private val paymentResultTopic: String,
 ) : PaymentApi {
 
     @Transactional
@@ -70,17 +73,17 @@ class PaymentService(
             PaymentStatusView.SUCCEEDED -> {
                 payment.markSucceeded(gatewayResult.paymentId, now)
                 payment.rawResponse = gatewayResult.rawResponse
-                eventPublisher.publishEvent(PaymentSucceededEvent(payment.orderId, gatewayResult.paymentId, now))
+                enqueuePaymentResult(payment, PaymentResultEventType.SUCCEEDED, gatewayResult.paymentId, null, now)
             }
             PaymentStatusView.FAILED -> {
                 payment.markFailed("PAYMENT_CONFIRM_FAILED", now)
                 payment.rawResponse = gatewayResult.rawResponse
-                eventPublisher.publishEvent(PaymentFailedEvent(payment.orderId, gatewayResult.paymentId, "PAYMENT_CONFIRM_FAILED", now))
+                enqueuePaymentResult(payment, PaymentResultEventType.FAILED, gatewayResult.paymentId, "PAYMENT_CONFIRM_FAILED", now)
             }
             PaymentStatusView.CANCELED -> {
                 payment.cancel("PAYMENT_CANCELED", now)
                 payment.rawResponse = gatewayResult.rawResponse
-                eventPublisher.publishEvent(PaymentCanceledEvent(payment.orderId, gatewayResult.paymentId, "PAYMENT_CANCELED", now))
+                enqueuePaymentResult(payment, PaymentResultEventType.CANCELED, gatewayResult.paymentId, "PAYMENT_CANCELED", now)
             }
             PaymentStatusView.READY, PaymentStatusView.PENDING -> throw PaymentException(ErrorCode.PAYMENT_CONFIRM_FAILED)
         }
@@ -133,17 +136,29 @@ class PaymentService(
         when (request.status) {
             PaymentStatusView.SUCCEEDED -> {
                 payment.markSucceeded(request.paymentId, now)
-                eventPublisher.publishEvent(PaymentSucceededEvent(payment.orderId, payment.paymentKey ?: request.paymentId ?: payment.id.toString(), now))
+                enqueuePaymentResult(
+                    payment,
+                    PaymentResultEventType.SUCCEEDED,
+                    payment.paymentKey ?: request.paymentId ?: payment.id.toString(),
+                    null,
+                    now,
+                )
             }
             PaymentStatusView.FAILED -> {
                 val reason = request.reason ?: "PAYMENT_FAILED"
                 payment.markFailed(reason, now)
-                eventPublisher.publishEvent(PaymentFailedEvent(payment.orderId, request.paymentId, reason, now))
+                enqueuePaymentResult(payment, PaymentResultEventType.FAILED, request.paymentId, reason, now)
             }
             PaymentStatusView.CANCELED -> {
                 val reason = request.reason ?: "PAYMENT_CANCELED"
                 payment.cancel(reason, now)
-                eventPublisher.publishEvent(PaymentCanceledEvent(payment.orderId, payment.paymentKey ?: request.paymentId ?: payment.id.toString(), reason, now))
+                enqueuePaymentResult(
+                    payment,
+                    PaymentResultEventType.CANCELED,
+                    payment.paymentKey ?: request.paymentId ?: payment.id.toString(),
+                    reason,
+                    now,
+                )
             }
             PaymentStatusView.READY, PaymentStatusView.PENDING -> return
         }
@@ -157,6 +172,35 @@ class PaymentService(
             request.orderId != null -> paymentRepository.findByOrderId(request.orderId)
             else -> null
         }
+
+    private fun enqueuePaymentResult(
+        payment: Payment,
+        eventType: PaymentResultEventType,
+        paymentId: String?,
+        reason: String?,
+        occurredAt: LocalDateTime,
+    ) {
+        val eventId = UUID.randomUUID().toString()
+        val payload = objectMapper.writeValueAsString(
+            PaymentResultEvent(
+                eventId = eventId,
+                eventType = eventType,
+                orderId = payment.orderId,
+                paymentId = paymentId,
+                reason = reason,
+                occurredAt = occurredAt,
+            ),
+        )
+        paymentOutboxRepository.save(
+            PaymentOutboxMessage(
+                eventId = eventId,
+                topic = paymentResultTopic,
+                messageKey = payment.orderId.toString(),
+                eventType = eventType.name,
+                payload = payload,
+            ),
+        )
+    }
 }
 
 private fun Payment.toResult(redirectUrl: String? = null): PaymentExecutionResult =

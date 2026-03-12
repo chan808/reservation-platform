@@ -4,7 +4,9 @@ param(
     [string]$SqlFile = ".\\reset-perf-state.sql",
     [int64]$ProductId = 0,
     [string]$ProductName = "PERF_TEST_PRODUCT",
-    [int]$StockQuantity = 1000000
+    [int]$StockQuantity = 1000000,
+    [int]$MaxAttempts = 5,
+    [int]$RetryDelayMs = 500
 )
 
 $ErrorActionPreference = "Stop"
@@ -30,7 +32,26 @@ if ($ProductId -le 0) {
 $sqlTemplate = Get-Content -Path $sqlPath -Raw
 $sql = $sqlTemplate.Replace("__PERF_PRODUCT_ID__", $ProductId.ToString())
 $sql = $sql.Replace("__PERF_PRODUCT_STOCK__", $StockQuantity.ToString())
-$null = Invoke-ComposeMySql -Context $context -Sql $sql
+$resetSucceeded = $false
+
+for ($attempt = 1; $attempt -le $MaxAttempts; $attempt++) {
+    try {
+        $null = Invoke-ComposeMySql -Context $context -Sql $sql
+        $resetSucceeded = $true
+        break
+    } catch {
+        if ($attempt -eq $MaxAttempts) {
+            throw
+        }
+        Write-Host "Reset retry $attempt failed. Waiting ${RetryDelayMs}ms before retry..."
+        Start-Sleep -Milliseconds $RetryDelayMs
+    }
+}
+
+if (-not $resetSucceeded) {
+    throw "Perf state reset failed."
+}
+
 Clear-InventoryMirror -Context $context -ProductId $ProductId
 
 $productRow = Get-PerfProductRow -Context $context -ProductName $ProductName

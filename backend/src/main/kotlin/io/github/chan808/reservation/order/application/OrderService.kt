@@ -152,57 +152,22 @@ class OrderService(
             ),
         )
 
-        when (payment.status) {
-            PaymentStatusView.SUCCEEDED -> {
-                order.markPaid()
-                orderStatusHistoryRepository.save(
-                    OrderStatusHistory(
-                        orderId = order.id,
-                        fromStatus = OrderStatus.PENDING_PAYMENT.name,
-                        toStatus = order.status.name,
-                        reason = "PAYMENT_SUCCEEDED",
-                        actorType = "PAYMENT",
-                        actorId = payment.paymentId,
-                    ),
-                )
-            }
-            PaymentStatusView.FAILED -> {
-                val reason = payment.reason ?: "PAYMENT_CONFIRM_FAILED"
-                order.markPaymentFailed(reason)
-                inventoryApi.releaseStock(order.productId, order.quantity)
-                orderStatusHistoryRepository.save(
-                    OrderStatusHistory(
-                        orderId = order.id,
-                        fromStatus = OrderStatus.PENDING_PAYMENT.name,
-                        toStatus = order.status.name,
-                        reason = reason,
-                        actorType = "PAYMENT",
-                        actorId = payment.paymentId,
-                    ),
-                )
-            }
-            PaymentStatusView.CANCELED -> {
-                val reason = payment.reason ?: "PAYMENT_CANCELED"
-                order.cancel(reason, LocalDateTime.now())
-                inventoryApi.releaseStock(order.productId, order.quantity)
-                orderStatusHistoryRepository.save(
-                    OrderStatusHistory(
-                        orderId = order.id,
-                        fromStatus = OrderStatus.PENDING_PAYMENT.name,
-                        toStatus = order.status.name,
-                        reason = reason,
-                        actorType = "PAYMENT",
-                        actorId = payment.paymentId,
-                    ),
-                )
-            }
-            PaymentStatusView.READY,
-            PaymentStatusView.PENDING -> {
-                throw OrderException(ErrorCode.PAYMENT_CONFIRM_FAILED)
-            }
+        if (payment.status in setOf(PaymentStatusView.SUCCEEDED, PaymentStatusView.FAILED, PaymentStatusView.CANCELED)) {
+            order.markPaymentProcessing()
+            orderStatusHistoryRepository.save(
+                OrderStatusHistory(
+                    orderId = order.id,
+                    fromStatus = OrderStatus.PENDING_PAYMENT.name,
+                    toStatus = order.status.name,
+                    reason = "PAYMENT_RESULT_PROCESSING",
+                    actorType = "PAYMENT",
+                    actorId = payment.paymentId,
+                ),
+            )
+            return payment
         }
 
-        return payment
+        throw OrderException(ErrorCode.PAYMENT_CONFIRM_FAILED)
     }
 
     @Transactional
@@ -249,6 +214,7 @@ class OrderService(
 private fun OrderStatus.toView(): OrderStatusView =
     when (this) {
         OrderStatus.PENDING_PAYMENT -> OrderStatusView.PENDING_PAYMENT
+        OrderStatus.PAYMENT_PROCESSING -> OrderStatusView.PAYMENT_PROCESSING
         OrderStatus.PAID -> OrderStatusView.PAID
         OrderStatus.PAYMENT_FAILED -> OrderStatusView.PAYMENT_FAILED
         OrderStatus.CANCELED -> OrderStatusView.CANCELED

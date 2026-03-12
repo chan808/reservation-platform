@@ -19,6 +19,7 @@ data class OrderPaymentView(
 
 enum class OrderStatusView {
     PENDING_PAYMENT,
+    PAYMENT_PROCESSING,
     PAID,
     PAYMENT_FAILED,
     CANCELED,

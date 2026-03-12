@@ -144,15 +144,6 @@ class RedisInventoryService(
         markDirty(productId)
     }
 
-    internal fun syncDirtyProduct(productId: Long) {
-        val stock = redisTemplate.opsForHash()
-            .get(RedisInventoryKeys.productKey(productId), STOCK_FIELD)
-            ?.toString()
-            ?.toIntOrNull()
-            ?: return
-        productStockPort.updateAvailableStock(productId, stock)
-    }
-
     private fun ensureLoaded(productId: Long, forceReload: Boolean = false) {
         val productKey = RedisInventoryKeys.productKey(productId)
         if (!forceReload && redisTemplate.hasKey(productKey) == true) {

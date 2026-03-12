@@ -14,7 +14,7 @@ class JpaProductStockPort(
 ) : ProductStockPort {
 
     override fun findSnapshot(productId: Long): ProductStockSnapshot? =
-        productRepository.findById(productId).orElse(null)?.let(::toSnapshot)
+        productRepository.findById(productId).orElse(null)?.let { it.toSnapshot() }
 
     override fun findByIdForUpdate(productId: Long): ManagedProductStock? =
         productRepository.findByIdForUpdate(productId)?.let(::JpaManagedProductStock)

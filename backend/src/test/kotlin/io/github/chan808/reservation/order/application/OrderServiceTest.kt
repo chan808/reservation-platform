@@ -18,6 +18,7 @@ import io.github.chan808.reservation.payment.api.PaymentExecutionResult
 import io.github.chan808.reservation.payment.api.PaymentMethodType
 import io.github.chan808.reservation.payment.api.PaymentStatusView
 import io.mockk.Runs
+import io.mockk.slot
 import io.mockk.every
 import io.mockk.just
 import io.mockk.mockk
@@ -102,6 +103,36 @@ class OrderServiceTest {
     }
 
     @Test
+    fun `create checks duplicate only for pending payment orders`() {
+        val request = CreateOrderRequest(
+            productId = 10L,
+            quantity = 1,
+            orderRequestId = "req-pending-only",
+            paymentType = PaymentMethodType.TOSS,
+        )
+        val statusesSlot = slot<Collection<OrderStatus>>()
+        every { memberApi.findAuthMemberById(1L) } returns memberView
+        every { orderRepository.findByOrderRequestId("req-pending-only") } returns null
+        every {
+            orderRepository.existsByMemberIdAndProductIdAndStatusIn(1L, 10L, capture(statusesSlot))
+        } returns false
+        every { inventoryApi.reserveStock(any()) } returns StockReservationResult(10L, 1, 5000, 9)
+        every { orderRepository.save(any()) } answers { firstArg<Order>() }
+        every { orderStatusHistoryRepository.save(any()) } answers { firstArg() }
+        every { paymentApi.preparePayment(any()) } returns PaymentExecutionResult(
+            paymentId = "pay-pending-only",
+            redirectUrl = null,
+            status = PaymentStatusView.READY,
+        )
+        every { eventPublisher.publishEvent(any<Any>()) } just Runs
+
+        orderService.create(1L, request)
+
+        assertEquals(setOf(OrderStatus.PENDING_PAYMENT), statusesSlot.captured.toSet())
+        verify(exactly = 1) { orderRepository.existsByMemberIdAndProductIdAndStatusIn(1L, 10L, any()) }
+    }
+
+    @Test
     fun `cancel releases stock and cancels payment`() {
         val order = Order(
             orderNumber = "ORD-1",
@@ -171,7 +202,7 @@ class OrderServiceTest {
     }
 
     @Test
-    fun `confirmPayment updates order synchronously when payment succeeds`() {
+    fun `confirmPayment moves order to payment processing when payment succeeds`() {
         val order = Order(
             orderNumber = "ORD-3",
             memberId = 1L,
@@ -197,13 +228,13 @@ class OrderServiceTest {
         val result = orderService.confirmPayment(1L, 3L, ConfirmOrderPaymentRequest("pay-3", 10000))
 
         assertEquals(PaymentStatusView.SUCCEEDED, result.status)
-        assertEquals(OrderStatus.PAID, order.status)
+        assertEquals(OrderStatus.PAYMENT_PROCESSING, order.status)
         verify(exactly = 0) { inventoryApi.releaseStock(any(), any()) }
         verify { orderStatusHistoryRepository.save(any()) }
     }
 
     @Test
-    fun `confirmPayment releases stock synchronously when payment fails`() {
+    fun `confirmPayment moves order to payment processing when payment fails`() {
         val order = Order(
             orderNumber = "ORD-4",
             memberId = 1L,
@@ -225,14 +256,13 @@ class OrderServiceTest {
             status = PaymentStatusView.FAILED,
             reason = "PAYMENT_CONFIRM_FAILED",
         )
-        every { inventoryApi.releaseStock(10L, 1) } just Runs
         every { orderStatusHistoryRepository.save(any()) } answers { firstArg() }
 
         val result = orderService.confirmPayment(1L, 4L, ConfirmOrderPaymentRequest("pay-4", 10000))
 
         assertEquals(PaymentStatusView.FAILED, result.status)
-        assertEquals(OrderStatus.PAYMENT_FAILED, order.status)
-        verify { inventoryApi.releaseStock(10L, 1) }
+        assertEquals(OrderStatus.PAYMENT_PROCESSING, order.status)
+        verify(exactly = 0) { inventoryApi.releaseStock(any(), any()) }
         verify { orderStatusHistoryRepository.save(any()) }
     }
 }

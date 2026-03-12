@@ -27,6 +27,7 @@ repositories {
 dependencyManagement {
     imports {
         mavenBom("org.springframework.modulith:spring-modulith-bom:2.0.3")
+        mavenBom("org.testcontainers:testcontainers-bom:2.0.2")
     }
 }
 
@@ -46,6 +47,7 @@ dependencies {
     // Data
     implementation("org.springframework.boot:spring-boot-starter-data-jpa")
     implementation("org.springframework.boot:spring-boot-starter-data-redis")
+    implementation("org.springframework.boot:spring-boot-starter-kafka")
 
     // Kotlin / Jackson 3 (Boot 4.x 기본)
     implementation("org.jetbrains.kotlin:kotlin-reflect")
@@ -85,6 +87,7 @@ dependencies {
     // springmockk: Spring 컨텍스트 내에서 @MockkBean 사용 가능하게 해주는 브릿지
     testImplementation("com.ninja-squad:springmockk:4.0.2")
     testImplementation("org.testcontainers:testcontainers-junit-jupiter")
+    testImplementation("org.testcontainers:testcontainers-kafka")
     testImplementation("org.testcontainers:testcontainers-mysql")
     testImplementation("org.testcontainers:testcontainers") // GenericContainer (Redis 등)
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")

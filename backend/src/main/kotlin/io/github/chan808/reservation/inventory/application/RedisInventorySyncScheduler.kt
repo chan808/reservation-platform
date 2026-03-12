@@ -10,7 +10,7 @@ import org.springframework.stereotype.Component
 @ConditionalOnProperty(name = ["app.inventory.mode"], havingValue = "redis")
 class RedisInventorySyncScheduler(
     private val redisTemplate: StringRedisTemplate,
-    private val redisInventoryService: RedisInventoryService,
+    private val redisInventoryPersistenceService: RedisInventoryPersistenceService,
 ) {
 
     private val log = LoggerFactory.getLogger(RedisInventorySyncScheduler::class.java)
@@ -25,7 +25,7 @@ class RedisInventorySyncScheduler(
             val productId = rawProductId.toLongOrNull() ?: return@repeat
 
             try {
-                redisInventoryService.syncDirtyProduct(productId)
+                redisInventoryPersistenceService.syncDirtyProduct(productId)
             } catch (ex: RuntimeException) {
                 redisTemplate.opsForSet().add(RedisInventoryKeys.DIRTY_PRODUCTS_KEY, rawProductId)
                 log.warn("[INVENTORY] failed to sync dirty stock productId={}", productId, ex)
