@@ -20,6 +20,7 @@ class AuthEventListener(
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     fun onPasswordChanged(event: PasswordChangedEvent) {
         tokenStore.deleteAllSessionsForMember(event.memberId)
+        tokenStore.deleteAccessTokenVersion(event.memberId)
         domainMetrics.recordSessionInvalidation("password_changed")
         log.info("[AUTH] invalidated all sessions after password change memberId={}", event.memberId)
     }
@@ -27,6 +28,7 @@ class AuthEventListener(
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     fun onMemberWithdrawn(event: MemberWithdrawnEvent) {
         tokenStore.deleteAllSessionsForMember(event.memberId)
+        tokenStore.deleteAccessTokenVersion(event.memberId)
         domainMetrics.recordSessionInvalidation("member_withdrawn")
         log.info("[AUTH] invalidated all sessions after member withdrawal memberId={}", event.memberId)
     }

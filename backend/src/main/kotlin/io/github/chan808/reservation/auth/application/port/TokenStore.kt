@@ -10,4 +10,7 @@ interface TokenStore {
     fun releaseLock(sid: String)
     fun addSession(memberId: Long, sid: String)
     fun deleteAllSessionsForMember(memberId: Long)
+    fun findAccessTokenVersion(memberId: Long): Long?
+    fun cacheAccessTokenVersion(memberId: Long, tokenVersion: Long)
+    fun deleteAccessTokenVersion(memberId: Long)
 }

@@ -1,10 +1,12 @@
 package io.github.chan808.reservation.product.presentation
 
 import com.ninjasquad.springmockk.MockkBean
+import io.github.chan808.reservation.auth.application.port.TokenStore
 import io.github.chan808.reservation.auth.infrastructure.security.JwtProvider
 import io.github.chan808.reservation.auth.infrastructure.security.SecurityConfig
 import io.github.chan808.reservation.auth.infrastructure.security.SecurityExceptionHandler
 import io.github.chan808.reservation.common.ClientIpResolver
+import io.github.chan808.reservation.member.api.MemberApi
 import io.github.chan808.reservation.product.application.ProductService
 import io.jsonwebtoken.Claims
 import io.mockk.every
@@ -37,6 +39,8 @@ class ProductControllerTest {
     @MockkBean lateinit var productService: ProductService
     @MockkBean lateinit var jwtProvider: JwtProvider
     @MockkBean lateinit var clientIpResolver: ClientIpResolver
+    @MockkBean lateinit var memberApi: MemberApi
+    @MockkBean lateinit var tokenStore: TokenStore
 
     @BeforeEach
     fun setup() {
@@ -44,12 +48,16 @@ class ProductControllerTest {
         val userClaims = mockk<Claims>()
         every { userClaims.subject } returns "1"
         every { userClaims["role"] } returns "USER"
+        every { userClaims["tokenVersion"] } returns 0L
         every { jwtProvider.validate("user-token") } returns userClaims
 
         val adminClaims = mockk<Claims>()
         every { adminClaims.subject } returns "2"
         every { adminClaims["role"] } returns "ADMIN"
+        every { adminClaims["tokenVersion"] } returns 0L
         every { jwtProvider.validate("admin-token") } returns adminClaims
+        every { tokenStore.findAccessTokenVersion(1L) } returns 0L
+        every { tokenStore.findAccessTokenVersion(2L) } returns 0L
     }
 
     @Test

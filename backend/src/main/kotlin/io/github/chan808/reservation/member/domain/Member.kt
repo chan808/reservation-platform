@@ -39,6 +39,9 @@ class Member(
     @Column(nullable = false, length = 20)
     val role: MemberRole = MemberRole.USER,
 
+    @Column(nullable = false)
+    var tokenVersion: Long = 0L,
+
     @Column(nullable = true)
     var withdrawnAt: LocalDateTime? = null,
 
@@ -55,6 +58,10 @@ class Member(
 
     fun changePassword(encodedPassword: String) {
         this.password = encodedPassword
+    }
+
+    fun incrementTokenVersion() {
+        tokenVersion += 1
     }
 
     fun withdraw(

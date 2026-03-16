@@ -37,6 +37,7 @@ class RefreshTokenStoreTest {
     private val session = RefreshTokenSession(
         memberId = 1L,
         role = "USER",
+        tokenVersion = 0L,
         tokenHash = "hash-value",
         absoluteExpiryEpoch = Instant.now().plusSeconds(2592000).epochSecond,
     )
@@ -68,6 +69,7 @@ class RefreshTokenStoreTest {
         assertNotNull(found)
         assertEquals(1L, found.memberId)
         assertEquals("USER", found.role)
+        assertEquals(0L, found.tokenVersion)
         assertEquals("hash-value", found.tokenHash)
     }
 
@@ -144,5 +146,16 @@ class RefreshTokenStoreTest {
     @Test
     fun `delete all sessions on empty member does nothing`() {
         store.deleteAllSessionsForMember(99L)
+    }
+
+    @Test
+    fun `access token version cache can be stored loaded and deleted`() {
+        store.cacheAccessTokenVersion(1L, 7L)
+
+        assertEquals(7L, store.findAccessTokenVersion(1L))
+
+        store.deleteAccessTokenVersion(1L)
+
+        assertNull(store.findAccessTokenVersion(1L))
     }
 }

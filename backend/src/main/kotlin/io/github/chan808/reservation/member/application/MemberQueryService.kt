@@ -54,6 +54,7 @@ class MemberQueryService(
 
         breachedPasswordChecker.check(newRawPassword, member.email)
         member.changePassword(passwordEncoder.encode(newRawPassword) ?: error("PasswordEncoder returned null"))
+        member.incrementTokenVersion()
         eventPublisher.publishEvent(PasswordChangedEvent(memberId))
         domainMetrics.recordPasswordChange()
     }
@@ -97,6 +98,7 @@ class MemberQueryService(
         email = email,
         encodedPassword = password,
         role = role.name,
+        tokenVersion = tokenVersion,
         emailVerified = emailVerified,
         provider = provider,
     )

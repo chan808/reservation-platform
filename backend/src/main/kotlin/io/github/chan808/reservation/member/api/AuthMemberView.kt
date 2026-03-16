@@ -5,6 +5,7 @@ data class AuthMemberView(
     val email: String,
     val encodedPassword: String?,
     val role: String,
+    val tokenVersion: Long,
     val emailVerified: Boolean,
     val provider: String?,
 ) {

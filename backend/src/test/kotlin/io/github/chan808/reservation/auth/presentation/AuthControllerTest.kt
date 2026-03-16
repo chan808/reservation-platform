@@ -3,6 +3,7 @@ package io.github.chan808.reservation.auth.presentation
 import com.ninjasquad.springmockk.MockkBean
 import io.github.chan808.reservation.auth.application.AuthCommandService
 import io.github.chan808.reservation.auth.application.PasswordResetService
+import io.github.chan808.reservation.auth.application.port.TokenStore
 import io.github.chan808.reservation.auth.infrastructure.redis.OAuthCodeStore
 import io.github.chan808.reservation.auth.infrastructure.security.JwtProvider
 import io.github.chan808.reservation.auth.infrastructure.security.SecurityConfig
@@ -48,6 +49,7 @@ class AuthControllerTest {
     @MockkBean lateinit var clientIpResolver: ClientIpResolver
     @MockkBean lateinit var oAuthCodeStore: OAuthCodeStore
     @MockkBean lateinit var jwtProvider: JwtProvider
+    @MockkBean lateinit var tokenStore: TokenStore
     @MockkBean(relaxed = true) lateinit var securityExceptionHandler: SecurityExceptionHandler
 
     @BeforeEach

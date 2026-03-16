@@ -43,11 +43,9 @@ class MemberCommandService(
                 throw MemberException(ErrorCode.EMAIL_ALREADY_EXISTS)
             }
 
-            breachedPasswordChecker.check(request.password, email)
-            existing.changePassword(passwordEncoder.encode(request.password) ?: error("PasswordEncoder returned null"))
             emailVerificationService.sendVerification(existing.id, existing.email)
             domainMetrics.recordSignupSuccess()
-            log.info("[AUTH] unverified signup retried memberId={}", existing.id)
+            log.info("[AUTH] unverified signup retried memberId={} passwordUnchanged=true", existing.id)
             return MemberResponse.from(existing)
         }
 
@@ -80,6 +78,7 @@ class MemberCommandService(
         }
         breachedPasswordChecker.check(request.newPassword, member.email)
         member.changePassword(passwordEncoder.encode(request.newPassword) ?: error("PasswordEncoder returned null"))
+        member.incrementTokenVersion()
         eventPublisher.publishEvent(PasswordChangedEvent(memberId))
         domainMetrics.recordPasswordChange()
         log.info("[AUTH] password changed memberId={}", memberId)
@@ -92,6 +91,7 @@ class MemberCommandService(
         val uniqueSuffix = UUID.randomUUID().toString()
         val anonymizedEmail = "withdrawn+${member.id}.$uniqueSuffix@example.invalid"
         val anonymizedProviderId = member.providerId?.let { "withdrawn:${member.id}:$uniqueSuffix" }
+        member.incrementTokenVersion()
         member.withdraw(anonymizedEmail, anonymizedProviderId, withdrawnAt)
         eventPublisher.publishEvent(MemberWithdrawnEvent(memberId))
         domainMetrics.recordWithdrawal()

@@ -16,11 +16,12 @@ class JwtProvider(private val props: JwtProperties) : AccessTokenPort {
         Keys.hmacShaKeyFor(props.secret.toByteArray(Charsets.UTF_8))
     }
 
-    override fun generateAccessToken(memberId: Long, role: String): String {
+    override fun generateAccessToken(memberId: Long, role: String, tokenVersion: Long): String {
         val now = Date()
         return Jwts.builder()
             .subject(memberId.toString())
             .claim("role", role)
+            .claim("tokenVersion", tokenVersion)
             .issuedAt(now)
             .expiration(Date(now.time + props.accessTokenExpiry * 1000))
             .signWith(signingKey)

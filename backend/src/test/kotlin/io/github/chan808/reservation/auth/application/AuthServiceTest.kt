@@ -44,6 +44,7 @@ class AuthCommandServiceTest {
         email = "test@example.com",
         encodedPassword = "encoded-password",
         role = "USER",
+        tokenVersion = 0L,
         emailVerified = true,
         provider = null,
     )
@@ -53,9 +54,10 @@ class AuthCommandServiceTest {
         every { loginRateLimitService.check(any(), any()) } just Runs
         every { memberApi.findAuthMemberByEmail("test@example.com") } returns memberView
         every { passwordEncoder.matches(any(), any()) } returns true
-        every { accessTokenPort.generateAccessToken(1L, "USER") } returns "access-token"
+        every { accessTokenPort.generateAccessToken(1L, "USER", 0L) } returns "access-token"
         every { tokenStore.save(any(), any(), any()) } just Runs
         every { tokenStore.addSession(any(), any()) } just Runs
+        every { tokenStore.cacheAccessTokenVersion(1L, 0L) } just Runs
 
         val (at, rt) = authCommandService.login(LoginRequest("test@example.com", "password123"), "127.0.0.1")
 
@@ -90,6 +92,7 @@ class AuthCommandServiceTest {
         val session = RefreshTokenSession(
             memberId = 1L,
             role = "USER",
+            tokenVersion = 0L,
             tokenHash = "wrong-hash",
             absoluteExpiryEpoch = Instant.now().plusSeconds(3600).epochSecond,
         )
@@ -110,6 +113,7 @@ class AuthCommandServiceTest {
         val session = RefreshTokenSession(
             memberId = 1L,
             role = "USER",
+            tokenVersion = 0L,
             tokenHash = "hash-value",
             absoluteExpiryEpoch = Instant.now().plusSeconds(3600).epochSecond,
         )

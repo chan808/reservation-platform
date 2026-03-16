@@ -1,10 +1,12 @@
 package io.github.chan808.reservation.order.presentation
 
 import com.ninjasquad.springmockk.MockkBean
+import io.github.chan808.reservation.auth.application.port.TokenStore
 import io.github.chan808.reservation.auth.infrastructure.security.JwtProvider
 import io.github.chan808.reservation.auth.infrastructure.security.SecurityConfig
 import io.github.chan808.reservation.auth.infrastructure.security.SecurityExceptionHandler
 import io.github.chan808.reservation.common.ClientIpResolver
+import io.github.chan808.reservation.member.api.MemberApi
 import io.github.chan808.reservation.order.application.OrderService
 import io.github.chan808.reservation.order.domain.OrderStatus
 import io.github.chan808.reservation.payment.api.PaymentExecutionResult
@@ -41,6 +43,8 @@ class OrderControllerTest {
     @MockkBean lateinit var orderService: OrderService
     @MockkBean lateinit var jwtProvider: JwtProvider
     @MockkBean lateinit var clientIpResolver: ClientIpResolver
+    @MockkBean lateinit var memberApi: MemberApi
+    @MockkBean lateinit var tokenStore: TokenStore
 
     private val response = OrderResponse(
         id = 1L,
@@ -65,7 +69,9 @@ class OrderControllerTest {
         val claims = mockk<Claims>()
         every { claims.subject } returns "1"
         every { claims["role"] } returns "USER"
+        every { claims["tokenVersion"] } returns 0L
         every { jwtProvider.validate("test-token") } returns claims
+        every { tokenStore.findAccessTokenVersion(1L) } returns 0L
     }
 
     @Test

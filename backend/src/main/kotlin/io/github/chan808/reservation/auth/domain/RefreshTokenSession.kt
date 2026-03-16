@@ -5,6 +5,7 @@ package io.github.chan808.reservation.auth.domain
 data class RefreshTokenSession(
     val memberId: Long,
     val role: String,
+    val tokenVersion: Long,
     val tokenHash: String,
     val absoluteExpiryEpoch: Long,
 )

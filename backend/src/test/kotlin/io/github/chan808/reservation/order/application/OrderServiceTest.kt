@@ -51,6 +51,7 @@ class OrderServiceTest {
         email = "buyer@example.com",
         encodedPassword = "encoded",
         role = "USER",
+        tokenVersion = 0L,
         emailVerified = true,
         provider = null,
     )

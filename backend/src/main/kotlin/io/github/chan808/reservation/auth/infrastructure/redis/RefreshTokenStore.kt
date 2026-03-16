@@ -20,6 +20,8 @@ class RefreshTokenStore(
         private const val LOCK_TTL = 3L
         private const val MEMBER_SESSIONS_PREFIX = "MEMBER_SESSIONS:"
         private const val MEMBER_SESSIONS_TTL = 30L * 24 * 3600
+        private const val ACCESS_TOKEN_VERSION_PREFIX = "ATV:"
+        private const val ACCESS_TOKEN_VERSION_TTL = 30L * 24 * 3600
 
         private val DELETE_ALL_SESSIONS_SCRIPT = DefaultRedisScript(
             """
@@ -88,5 +90,21 @@ class RefreshTokenStore(
     override fun deleteAllSessionsForMember(memberId: Long) {
         val setKey = "$MEMBER_SESSIONS_PREFIX$memberId"
         redisTemplate.execute(DELETE_ALL_SESSIONS_SCRIPT, listOf(setKey), RT_PREFIX)
+    }
+
+    override fun findAccessTokenVersion(memberId: Long): Long? =
+        redisTemplate.opsForValue().get("$ACCESS_TOKEN_VERSION_PREFIX$memberId")?.toLongOrNull()
+
+    override fun cacheAccessTokenVersion(memberId: Long, tokenVersion: Long) {
+        redisTemplate.opsForValue().set(
+            "$ACCESS_TOKEN_VERSION_PREFIX$memberId",
+            tokenVersion.toString(),
+            ACCESS_TOKEN_VERSION_TTL,
+            TimeUnit.SECONDS,
+        )
+    }
+
+    override fun deleteAccessTokenVersion(memberId: Long) {
+        redisTemplate.delete("$ACCESS_TOKEN_VERSION_PREFIX$memberId")
     }
 }

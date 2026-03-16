@@ -70,6 +70,7 @@ class MemberQueryServiceTest {
         service.resetPassword(1L, "NewPass1!")
 
         assertEquals("encoded-password", member.password)
+        assertEquals(1L, member.tokenVersion)
         verify { eventPublisher.publishEvent(any<Any>()) }
     }
 

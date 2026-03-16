@@ -1,6 +1,7 @@
 package io.github.chan808.reservation.member.presentation
 
 import com.ninjasquad.springmockk.MockkBean
+import io.github.chan808.reservation.auth.application.port.TokenStore
 import io.github.chan808.reservation.auth.infrastructure.security.JwtProvider
 import io.github.chan808.reservation.auth.infrastructure.security.SecurityConfig
 import io.github.chan808.reservation.auth.infrastructure.security.SecurityExceptionHandler
@@ -8,6 +9,7 @@ import io.github.chan808.reservation.common.ClientIpResolver
 import io.github.chan808.reservation.common.ErrorCode
 import io.github.chan808.reservation.common.MemberException
 import io.github.chan808.reservation.common.RateLimitException
+import io.github.chan808.reservation.member.api.MemberApi
 import io.github.chan808.reservation.member.application.MemberCommandService
 import io.jsonwebtoken.Claims
 import io.mockk.Runs
@@ -43,8 +45,10 @@ class MemberControllerTest {
     lateinit var mockMvc: MockMvc
 
     @MockkBean lateinit var memberCommandService: MemberCommandService
+    @MockkBean lateinit var memberApi: MemberApi
     @MockkBean lateinit var clientIpResolver: ClientIpResolver
     @MockkBean lateinit var jwtProvider: JwtProvider
+    @MockkBean lateinit var tokenStore: TokenStore
 
     private val testMemberResponse = MemberResponse(
         id = 1L,
@@ -63,7 +67,9 @@ class MemberControllerTest {
         val claims = mockk<Claims>()
         every { claims.subject } returns "1"
         every { claims["role"] } returns "USER"
+        every { claims["tokenVersion"] } returns 0L
         every { jwtProvider.validate("test-token") } returns claims
+        every { tokenStore.findAccessTokenVersion(1L) } returns 0L
     }
 
     @Test

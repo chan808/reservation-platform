@@ -3,10 +3,11 @@ package io.github.chan808.reservation.member.application
 import io.github.chan808.reservation.common.ErrorCode
 import io.github.chan808.reservation.common.MemberException
 import io.github.chan808.reservation.common.metrics.DomainMetrics
-import io.github.chan808.reservation.member.presentation.SignupRequest
 import io.github.chan808.reservation.member.domain.Member
 import io.github.chan808.reservation.member.infrastructure.persistence.MemberRepository
 import io.github.chan808.reservation.member.infrastructure.security.BreachedPasswordChecker
+import io.github.chan808.reservation.member.presentation.ChangePasswordRequest
+import io.github.chan808.reservation.member.presentation.SignupRequest
 import io.mockk.Runs
 import io.mockk.every
 import io.mockk.just
@@ -16,8 +17,6 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import org.springframework.context.ApplicationEventPublisher
 import org.springframework.security.crypto.password.PasswordEncoder
-import java.time.LocalDateTime
-import java.util.Optional
 import kotlin.test.assertEquals
 import kotlin.test.assertNotEquals
 import kotlin.test.assertNotNull
@@ -72,7 +71,7 @@ class MemberCommandServiceTest {
     }
 
     @Test
-    fun `unverified local account can sign up again and receives a new verification mail`() {
+    fun `unverified local account signup retry keeps existing password and sends verification mail`() {
         val existing = Member(
             email = "test@example.com",
             password = "old-encoded",
@@ -81,15 +80,15 @@ class MemberCommandServiceTest {
         )
         every { signupRateLimitService.check(any()) } just Runs
         every { memberRepository.findByEmailAndWithdrawnAtIsNull("test@example.com") } returns existing
-        every { breachedPasswordChecker.check(any(), any()) } just Runs
-        every { passwordEncoder.encode("Password1!") } returns "new-encoded"
         every { emailVerificationService.sendVerification(1L, "test@example.com") } just Runs
 
         val response = memberCommandService.signup(SignupRequest("test@example.com", "Password1!"), "127.0.0.1")
 
         assertEquals(existing.id, response.id)
-        assertEquals("new-encoded", existing.password)
+        assertEquals("old-encoded", existing.password)
         verify { emailVerificationService.sendVerification(1L, "test@example.com") }
+        verify(exactly = 0) { breachedPasswordChecker.check(any(), any()) }
+        verify(exactly = 0) { passwordEncoder.encode(any()) }
         verify(exactly = 0) { memberRepository.save(any()) }
     }
 
@@ -99,6 +98,27 @@ class MemberCommandServiceTest {
 
         val ex = assertThrows<MemberException> { memberCommandService.getById(999L) }
         assertEquals(ErrorCode.MEMBER_NOT_FOUND, ex.errorCode)
+    }
+
+    @Test
+    fun `change password increments token version and publishes event`() {
+        val member = Member(
+            email = "test@example.com",
+            password = "encoded-old",
+            emailVerified = true,
+            id = 1L,
+        )
+        every { memberRepository.findByIdAndWithdrawnAtIsNull(1L) } returns member
+        every { passwordEncoder.matches("OldPass1!", "encoded-old") } returns true
+        every { breachedPasswordChecker.check("NewPass1!", "test@example.com") } just Runs
+        every { passwordEncoder.encode("NewPass1!") } returns "encoded-new"
+        every { eventPublisher.publishEvent(any<Any>()) } just Runs
+
+        memberCommandService.changePassword(1L, ChangePasswordRequest("OldPass1!", "NewPass1!"))
+
+        assertEquals("encoded-new", member.password)
+        assertEquals(1L, member.tokenVersion)
+        verify { eventPublisher.publishEvent(any<Any>()) }
     }
 
     @Test
@@ -123,6 +143,7 @@ class MemberCommandServiceTest {
         assertNull(member.nickname)
         assertEquals(false, member.emailVerified)
         assertNotNull(member.withdrawnAt)
+        assertEquals(1L, member.tokenVersion)
         verify(exactly = 0) { memberRepository.delete(any()) }
     }
 
