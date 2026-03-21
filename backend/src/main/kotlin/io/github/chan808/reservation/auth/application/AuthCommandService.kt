@@ -37,27 +37,19 @@ class AuthCommandService(
         loginRateLimitService.check(ip, email)
 
         val member = memberApi.findAuthMemberByEmail(email) ?: run {
-            domainMetrics.recordLoginFailure("email_not_found")
-            log.warn("[AUTH] login failed email={} reason=EMAIL_NOT_FOUND", maskEmail(email))
-            throw AuthException(ErrorCode.INVALID_CREDENTIALS)
+            failLogin(email, "email_not_found", "EMAIL_NOT_FOUND")
         }
 
         if (member.isOAuthAccount) {
-            domainMetrics.recordLoginFailure("oauth_account")
-            log.warn("[AUTH] login failed email={} reason=OAUTH_ACCOUNT provider={}", maskEmail(email), member.provider)
-            throw AuthException(ErrorCode.OAUTH_ACCOUNT_NO_PASSWORD)
+            failLogin(email, "oauth_account", "OAUTH_ACCOUNT", member.provider)
         }
 
         if (!passwordEncoder.matches(request.password, member.encodedPassword)) {
-            domainMetrics.recordLoginFailure("invalid_password")
-            log.warn("[AUTH] login failed email={} reason=INVALID_PASSWORD", maskEmail(email))
-            throw AuthException(ErrorCode.INVALID_CREDENTIALS)
+            failLogin(email, "invalid_password", "INVALID_PASSWORD")
         }
 
         if (!member.emailVerified) {
-            domainMetrics.recordLoginFailure("email_not_verified")
-            log.warn("[AUTH] login failed email={} reason=EMAIL_NOT_VERIFIED", maskEmail(email))
-            throw AuthException(ErrorCode.EMAIL_NOT_VERIFIED)
+            failLogin(email, "email_not_verified", "EMAIL_NOT_VERIFIED")
         }
 
         val (sid, rt) = generateRefreshToken()
@@ -173,5 +165,20 @@ class AuthCommandService(
     private fun hashToken(token: String): String {
         val bytes = MessageDigest.getInstance("SHA-256").digest(token.toByteArray(Charsets.UTF_8))
         return Base64.getEncoder().encodeToString(bytes)
+    }
+
+    private fun failLogin(
+        email: String,
+        metricReason: String,
+        logReason: String,
+        provider: String? = null,
+    ): Nothing {
+        domainMetrics.recordLoginFailure(metricReason)
+        if (provider == null) {
+            log.warn("[AUTH] login failed email={} reason={}", maskEmail(email), logReason)
+        } else {
+            log.warn("[AUTH] login failed email={} reason={} provider={}", maskEmail(email), logReason, provider)
+        }
+        throw AuthException(ErrorCode.INVALID_CREDENTIALS)
     }
 }

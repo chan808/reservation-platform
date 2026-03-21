@@ -78,6 +78,31 @@ class AuthCommandServiceTest {
     }
 
     @Test
+    fun `unverified account login returns invalid credentials`() {
+        every { loginRateLimitService.check(any(), any()) } just Runs
+        every { memberApi.findAuthMemberByEmail(any()) } returns memberView.copy(emailVerified = false)
+        every { passwordEncoder.matches(any(), any()) } returns true
+
+        val ex = assertThrows<AuthException> {
+            authCommandService.login(LoginRequest("test@example.com", "password123"), "127.0.0.1")
+        }
+
+        assertEquals(ErrorCode.INVALID_CREDENTIALS, ex.errorCode)
+    }
+
+    @Test
+    fun `oauth account login returns invalid credentials`() {
+        every { loginRateLimitService.check(any(), any()) } just Runs
+        every { memberApi.findAuthMemberByEmail(any()) } returns memberView.copy(provider = "GOOGLE")
+
+        val ex = assertThrows<AuthException> {
+            authCommandService.login(LoginRequest("test@example.com", "password123"), "127.0.0.1")
+        }
+
+        assertEquals(ErrorCode.INVALID_CREDENTIALS, ex.errorCode)
+    }
+
+    @Test
     fun `reissue lock conflict throws reissue conflict`() {
         every { tokenStore.tryLock(any()) } returns false
 

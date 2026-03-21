@@ -1,3 +1,12 @@
+cookie:
+  secure: true
+
+cors:
+  allowed-origin: ${CORS_ALLOWED_ORIGIN}
+
+app:
+  base-url: ${APP_BASE_URL}
+
 management:
   endpoints:
     web:
